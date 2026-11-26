@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Loot Vault - Device Verification</title>
+  <title>Loot Vault - 8-Layer Security Check</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -142,10 +142,10 @@
   <div class="card">
     <div class="crown-badge">👑</div>
     <div class="brand-title">💎 LOOT VAULT 💎</div>
-    <div class="subtitle">Hardware Security Check</div>
+    <div class="subtitle">8-Layer Anti-Fraud Shield</div>
     <p class="desc">Apna account unlock karne aur rewards claim karne ke liye niche button dabakar device verify karein.</p>
     <button id="vbtn" class="btn" onclick="verifyDevice()">🛡️ VERIFY MY DEVICE</button>
-    <div id="status">Ready for hardware check...</div>
+    <div id="status">Ready for 8-layer verification...</div>
   </div>
 
   <script>
@@ -157,10 +157,72 @@
         h ^= str.charCodeAt(i);
         h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
       }
-      return (h >>> 0).toString(16);
+      return (h >>> 0).toString(36);
     }
 
-    function getWebGLInfo() {
+    // Layer 1, 2, 3, 4: Multi-Storage Browser Locks
+    function getCookie(name) {
+      const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+      return m ? m[2] : "";
+    }
+
+    function getIDB() {
+      return new Promise((resolve) => {
+        try {
+          const req = indexedDB.open("LV_Shield_DB", 1);
+          req.onupgradeneeded = (e) => {
+            e.target.result.createObjectStore("vault");
+          };
+          req.onsuccess = (e) => {
+            const db = e.target.result;
+            const tx = db.transaction("vault", "readonly");
+            const getReq = tx.objectStore("vault").get("owner");
+            getReq.onsuccess = () => resolve(getReq.result || "");
+            getReq.onerror = () => resolve("");
+          };
+          req.onerror = () => resolve("");
+        } catch (e) { resolve(""); }
+      });
+    }
+
+    function setIDB(uid) {
+      try {
+        const req = indexedDB.open("LV_Shield_DB", 1);
+        req.onupgradeneeded = (e) => {
+          e.target.result.createObjectStore("vault");
+        };
+        req.onsuccess = (e) => {
+          const db = e.target.result;
+          const tx = db.transaction("vault", "readwrite");
+          tx.objectStore("vault").put(uid, "owner");
+        };
+      } catch (e) {}
+    }
+
+    async function checkAndSetBrowserLock(uid) {
+      let ls = "";
+      try { ls = localStorage.getItem("lv_owner_uid") || ""; } catch (e) {}
+      const ck = getCookie("lv_owner_uid");
+      const wn = (window.name && window.name.startsWith("lv_")) ? window.name.slice(3) : "";
+      const idb = await getIDB();
+
+      const owners = [ls, ck, wn, idb].filter(x => x && x.length > 3);
+      for (let i = 0; i < owners.length; i++) {
+        if (owners[i] !== uid) {
+          return true; // Duplicate detected in at least 1 storage layer!
+        }
+      }
+
+      // Lock all 4 storage layers to this uid
+      try { localStorage.setItem("lv_owner_uid", uid); } catch (e) {}
+      document.cookie = "lv_owner_uid=" + uid + "; max-age=315360000; path=/; SameSite=Lax";
+      try { window.name = "lv_" + uid; } catch (e) {}
+      setIDB(uid);
+      return false;
+    }
+
+    // Layer 5: WebGL GPU + Shader Precision
+    function getLock1_GPU() {
       try {
         const c = document.createElement('canvas');
         const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
@@ -168,16 +230,17 @@
         const dbg = gl.getExtension('WEBGL_debug_renderer_info');
         const vendor = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
         const renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
-        return vendor + "~" + renderer + "~" + gl.getParameter(gl.MAX_TEXTURE_SIZE);
-      } catch (e) {
-        return "glerr";
-      }
+        const prec = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+        const pStr = prec ? (prec.rangeMin + ":" + prec.rangeMax + ":" + prec.precision) : "noprec";
+        return fnv1a(vendor + "~" + renderer + "~" + pStr + "~" + gl.getParameter(gl.MAX_VERTEX_ATTRIBS));
+      } catch (e) { return "glerr"; }
     }
 
-    async function getAudioHash() {
+    // Layer 6: AudioContext Silicon DSP
+    async function getLock2_Audio() {
       try {
         const AudioCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-        if (!AudioCtx) return "noaudio";
+        if (!AudioCtx) return "noaud";
         const ctx = new AudioCtx(1, 44100, 44100);
         const osc = ctx.createOscillator();
         osc.type = "triangle";
@@ -194,16 +257,13 @@
         const buf = await ctx.startRendering();
         const data = buf.getChannelData(0);
         let sum = 0;
-        for (let i = 4500; i < 5000; i++) {
-          sum += Math.abs(data[i]);
-        }
-        return sum.toFixed(10);
-      } catch (e) {
-        return "auderr";
-      }
+        for (let i = 4500; i < 5000; i++) sum += Math.abs(data[i]);
+        return fnv1a(sum.toFixed(10));
+      } catch (e) { return "auderr"; }
     }
 
-    function getCanvasHash() {
+    // Layer 7: Canvas 2D + Font Metrics
+    function getLock3_Canvas() {
       try {
         const c = document.createElement('canvas');
         c.width = 240;
@@ -214,43 +274,31 @@
         ctx.fillRect(10, 10, 100, 30);
         ctx.fillStyle = "#069";
         ctx.font = "15px Arial";
-        ctx.fillText("LootVault_HW_Shield_2026!@#", 12, 32);
-        ctx.strokeStyle = "rgba(102, 204, 0, 0.7)";
-        ctx.beginPath();
-        ctx.arc(60, 30, 20, 0, Math.PI * 2, true);
-        ctx.stroke();
-        return fnv1a(c.toDataURL());
-      } catch (e) {
-        return "cnverr";
-      }
+        ctx.fillText("LootVault_8Layer_2026!@#", 12, 32);
+        const w1 = ctx.measureText("mmmmmmmmmmlli").width;
+        ctx.font = "15px Georgia";
+        const w2 = ctx.measureText("mmmmmmmmmmlli").width;
+        return fnv1a(c.toDataURL() + "|" + w1 + "|" + w2);
+      } catch (e) { return "cnverr"; }
     }
 
-    async function buildHardwarePayload() {
-      const gpu = getWebGLInfo();
-      const audio = await getAudioHash();
-      const canvas = getCanvasHash();
-
-      const hwCore = [
-        gpu,
+    // Layer 8: Screen + DPI + CPU + Touch + Timezone
+    function getLock4_ScreenCPU() {
+      const raw = [
         screen.width + "x" + screen.height,
         window.devicePixelRatio || 1,
         screen.colorDepth || 24,
         navigator.hardwareConcurrency || 0,
         navigator.maxTouchPoints || 0,
-        Intl.DateTimeFormat().resolvedOptions().timeZone || "utc"
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "utc",
+        navigator.platform || ""
       ].join("|");
-
-      const hwFull = hwCore + "|" + canvas + "|" + audio;
-
-      // Two hardware locks: h1 (full GPU+Audio+Canvas) and h2 (core GPU+Screen+CPU)
-      const h1 = fnv1a(hwFull);
-      const h2 = fnv1a(hwCore);
-      return "v_" + h1 + "_" + h2;
+      return fnv1a(raw);
     }
 
     async function verifyDevice() {
       const params = new URLSearchParams(window.location.search);
-      const uid = params.get("uid");
+      const uid = (params.get("uid") || "").trim();
       const statusEl = document.getElementById("status");
       const btn = document.getElementById("vbtn");
 
@@ -260,19 +308,26 @@
       }
 
       btn.disabled = true;
-      statusEl.innerHTML = "⏳ Scanning hardware signature...";
+      statusEl.innerHTML = "⏳ Running 8-layer security scan...";
 
-      try {
-        const payload = await buildHardwarePayload();
-        statusEl.innerHTML = "✅ <b>Hardware Verified!</b><br>Returning to bot in 1 second...";
+      const isStorageDup = await checkAndSetBrowserLock(uid);
+      const l1 = getLock1_GPU();
+      const l2 = await getLock2_Audio();
+      const l3 = getLock3_Canvas();
+      const l4 = getLock4_ScreenCPU();
 
-        setTimeout(() => {
-          window.location.href = "tg://resolve?domain=" + BOT_USERNAME + "&start=" + payload;
-        }, 1000);
-      } catch (err) {
-        statusEl.innerHTML = "❌ Error! Dubara try karein.";
-        btn.disabled = false;
+      const prefix = isStorageDup ? "f_" : "v_";
+      const code = prefix + l1 + "_" + l2 + "_" + l3 + "_" + l4;
+
+      if (isStorageDup) {
+        statusEl.innerHTML = "⚠️ <b>Duplicate Device Detected!</b><br>Returning to bot in 1 second...";
+      } else {
+        statusEl.innerHTML = "✅ <b>8-Layer Scan Complete!</b><br>Returning to bot in 1 second...";
       }
+
+      setTimeout(() => {
+        window.location.href = "tg://resolve?domain=" + BOT_USERNAME + "&start=" + code;
+      }, 1000);
     }
   </script>
 </body>
