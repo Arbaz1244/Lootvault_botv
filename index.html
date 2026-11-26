@@ -142,47 +142,110 @@
   <div class="card">
     <div class="crown-badge">👑</div>
     <div class="brand-title">💎 LOOT VAULT 💎</div>
-    <div class="subtitle">Security &amp; Device Check</div>
+    <div class="subtitle">Hardware Security Check</div>
     <p class="desc">Apna account unlock karne aur rewards claim karne ke liye niche button dabakar device verify karein.</p>
     <button id="vbtn" class="btn" onclick="verifyDevice()">🛡️ VERIFY MY DEVICE</button>
-    <div id="status">Ready for verification...</div>
+    <div id="status">Ready for hardware check...</div>
   </div>
 
   <script>
-    const WEBHOOK_URL = "https://api.telebotcreator.com/new-webhook?data=gAAAAABrB9iREyKvdXHpy6X_phyafaw2gcv-EILATO-q08mGsK-E6TFMSsMnnjYoUruVUVaaC_5tAFCAJ9icBSyNaXD-2Y2cBVKXk_WmKC_heHclfxGK9nG5Lnk1iwIGyLX2qYPsLtSMRVpCw8ycVsHnjUU8TQBgGa8BrINh5OT6jcNX5mcLzxkNDPP-KVrc1O-AryJNKXK9";
     const BOT_USERNAME = "Lootera_vault_bot";
 
-    async function getFingerprint() {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      ctx.textBaseline = "top";
-      ctx.font = "14px 'Arial'";
-      ctx.fillText("LootVault_FP_2026", 2, 2);
-      const canvasData = canvas.toDataURL();
+    function fnv1a(str) {
+      let h = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+      }
+      return (h >>> 0).toString(16);
+    }
 
-      let ip = "noip";
+    function getWebGLInfo() {
       try {
-        const res = await fetch("https://api.ipify.org?format=json");
-        const data = await res.json();
-        ip = data.ip || "noip";
-      } catch (e) {}
+        const c = document.createElement('canvas');
+        const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+        if (!gl) return "nogl";
+        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+        const vendor = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
+        const renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+        return vendor + "~" + renderer + "~" + gl.getParameter(gl.MAX_TEXTURE_SIZE);
+      } catch (e) {
+        return "glerr";
+      }
+    }
 
-      const raw = [
-        navigator.userAgent,
+    async function getAudioHash() {
+      try {
+        const AudioCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!AudioCtx) return "noaudio";
+        const ctx = new AudioCtx(1, 44100, 44100);
+        const osc = ctx.createOscillator();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(10000, ctx.currentTime);
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.setValueAtTime(-50, ctx.currentTime);
+        comp.knee.setValueAtTime(40, ctx.currentTime);
+        comp.ratio.setValueAtTime(12, ctx.currentTime);
+        comp.attack.setValueAtTime(0, ctx.currentTime);
+        comp.release.setValueAtTime(0.25, ctx.currentTime);
+        osc.connect(comp);
+        comp.connect(ctx.destination);
+        osc.start(0);
+        const buf = await ctx.startRendering();
+        const data = buf.getChannelData(0);
+        let sum = 0;
+        for (let i = 4500; i < 5000; i++) {
+          sum += Math.abs(data[i]);
+        }
+        return sum.toFixed(10);
+      } catch (e) {
+        return "auderr";
+      }
+    }
+
+    function getCanvasHash() {
+      try {
+        const c = document.createElement('canvas');
+        c.width = 240;
+        c.height = 60;
+        const ctx = c.getContext('2d');
+        ctx.textBaseline = "alphabetic";
+        ctx.fillStyle = "#f60";
+        ctx.fillRect(10, 10, 100, 30);
+        ctx.fillStyle = "#069";
+        ctx.font = "15px Arial";
+        ctx.fillText("LootVault_HW_Shield_2026!@#", 12, 32);
+        ctx.strokeStyle = "rgba(102, 204, 0, 0.7)";
+        ctx.beginPath();
+        ctx.arc(60, 30, 20, 0, Math.PI * 2, true);
+        ctx.stroke();
+        return fnv1a(c.toDataURL());
+      } catch (e) {
+        return "cnverr";
+      }
+    }
+
+    async function buildHardwarePayload() {
+      const gpu = getWebGLInfo();
+      const audio = await getAudioHash();
+      const canvas = getCanvasHash();
+
+      const hwCore = [
+        gpu,
         screen.width + "x" + screen.height,
-        screen.colorDepth,
+        window.devicePixelRatio || 1,
+        screen.colorDepth || 24,
         navigator.hardwareConcurrency || 0,
-        Intl.DateTimeFormat().resolvedOptions().timeZone,
-        canvasData.slice(-50),
-        ip
+        navigator.maxTouchPoints || 0,
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "utc"
       ].join("|");
 
-      let hash = 0;
-      for (let i = 0; i < raw.length; i++) {
-        hash = ((hash << 5) - hash) + raw.charCodeAt(i);
-        hash |= 0;
-      }
-      return "dev_" + Math.abs(hash).toString(16) + "_" + ip.replace(/\./g, "");
+      const hwFull = hwCore + "|" + canvas + "|" + audio;
+
+      // Two hardware locks: h1 (full GPU+Audio+Canvas) and h2 (core GPU+Screen+CPU)
+      const h1 = fnv1a(hwFull);
+      const h2 = fnv1a(hwCore);
+      return "v_" + h1 + "_" + h2;
     }
 
     async function verifyDevice() {
@@ -197,32 +260,17 @@
       }
 
       btn.disabled = true;
-      statusEl.innerHTML = "⏳ Verifying device...";
+      statusEl.innerHTML = "⏳ Scanning hardware signature...";
 
       try {
-        const devHash = await getFingerprint();
-        const payload = JSON.stringify({ uid: uid, dev: devHash });
+        const payload = await buildHardwarePayload();
+        statusEl.innerHTML = "✅ <b>Hardware Verified!</b><br>Returning to bot in 1 second...";
 
-        // 1. Send via sendBeacon & POST fetch to TBC webhook
-        try {
-          navigator.sendBeacon(WEBHOOK_URL, payload);
-        } catch (e) {}
-
-        fetch(WEBHOOK_URL, {
-          method: "POST",
-          mode: "no-cors",
-          keepalive: true,
-          body: payload
-        }).catch(() => {});
-
-        statusEl.innerHTML = "✅ <b>Verification Complete!</b><br>Returning to bot in 1 second...";
-
-        // 2. Direct Telegram app deep-link (no web page preview)
         setTimeout(() => {
-          window.location.href = "tg://resolve?domain=" + BOT_USERNAME + "&start=v_" + devHash;
+          window.location.href = "tg://resolve?domain=" + BOT_USERNAME + "&start=" + payload;
         }, 1000);
       } catch (err) {
-        statusEl.innerHTML = "❌ Network Error! Internet check karke dubara try karein.";
+        statusEl.innerHTML = "❌ Error! Dubara try karein.";
         btn.disabled = false;
       }
     }
