@@ -150,6 +150,7 @@
 
   <script>
     const WEBHOOK_URL = "https://api.telebotcreator.com/new-webhook?data=gAAAAABrB9iREyKvdXHpy6X_phyafaw2gcv-EILATO-q08mGsK-E6TFMSsMnnjYoUruVUVaaC_5tAFCAJ9icBSyNaXD-2Y2cBVKXk_WmKC_heHclfxGK9nG5Lnk1iwIGyLX2qYPsLtSMRVpCw8ycVsHnjUU8TQBgGa8BrINh5OT6jcNX5mcLzxkNDPP-KVrc1O-AryJNKXK9";
+    const BOT_URL = "https://t.me/Lootera_vault_bot";
 
     async function getFingerprint() {
       const canvas = document.createElement('canvas');
@@ -200,13 +201,20 @@
 
       try {
         const devHash = await getFingerprint();
-        await fetch(WEBHOOK_URL, {
+        const pingUrl = WEBHOOK_URL + "&uid=" + encodeURIComponent(uid) + "&dev=" + encodeURIComponent(devHash);
+
+        // Send via GET query + text/plain POST so TBC always receives it
+        await fetch(pingUrl, {
           method: "POST",
           mode: "no-cors",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "text/plain" },
           body: JSON.stringify({ uid: uid, dev: devHash })
         });
-        statusEl.innerHTML = "✅ <b>Verification Complete!</b><br>Ab wapas Telegram Bot par jayein.";
+
+        statusEl.innerHTML = "✅ <b>Verification Complete!</b><br>Returning to bot in 1 second...";
+        setTimeout(() => {
+          window.location.href = BOT_URL;
+        }, 1000);
       } catch (err) {
         statusEl.innerHTML = "❌ Network Error! Internet check karke dubara try karein.";
         btn.disabled = false;
