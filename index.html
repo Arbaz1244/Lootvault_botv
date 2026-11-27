@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Loot Vault - 8-Layer Security Check</title>
+  <title>Loot Vault - 9-Layer Security</title>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -142,14 +143,37 @@
   <div class="card">
     <div class="crown-badge">👑</div>
     <div class="brand-title">💎 LOOT VAULT 💎</div>
-    <div class="subtitle">8-Layer Anti-Fraud Shield</div>
+    <div class="subtitle">9-Layer Anti-Fraud Shield</div>
     <p class="desc">Apna account unlock karne aur rewards claim karne ke liye niche button dabakar device verify karein.</p>
-    <button id="vbtn" class="btn" onclick="verifyDevice()">🛡️ VERIFY MY DEVICE</button>
-    <div id="status">Ready for 8-layer verification...</div>
+
+    <div class="cf-turnstile"
+         data-sitekey="0x4AAAAAAGVTiUiSWYaq_GCZ"
+         data-callback="onCaptchaSuccess"
+         data-error-callback="onCaptchaError">
+    </div>
+
+    <button id="vbtn" class="btn" onclick="verifyDevice()" disabled>⏳ SECURITY CHECKING...</button>
+    <div id="status">Auto-verifying browser security...</div>
   </div>
 
   <script>
     const BOT_USERNAME = "Lootera_vault_bot";
+    let captchaPassed = false;
+
+    function onCaptchaSuccess(token) {
+      if (token && token.length > 10) {
+        captchaPassed = true;
+        const btn = document.getElementById("vbtn");
+        const statusEl = document.getElementById("status");
+        btn.disabled = false;
+        btn.innerHTML = "🛡️ VERIFY MY DEVICE";
+        statusEl.innerHTML = "✅ Security Passed! Tap button to continue.";
+      }
+    }
+
+    function onCaptchaError() {
+      document.getElementById("status").innerHTML = "❌ Bot/Proxy detected! Refresh page on normal network.";
+    }
 
     function fnv1a(str) {
       let h = 2166136261;
@@ -160,7 +184,6 @@
       return (h >>> 0).toString(36);
     }
 
-    // Layer 1, 2, 3, 4: Multi-Storage Browser Locks
     function getCookie(name) {
       const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
       return m ? m[2] : "";
@@ -209,11 +232,10 @@
       const owners = [ls, ck, wn, idb].filter(x => x && x.length > 3);
       for (let i = 0; i < owners.length; i++) {
         if (owners[i] !== uid) {
-          return true; // Duplicate detected in at least 1 storage layer!
+          return true;
         }
       }
 
-      // Lock all 4 storage layers to this uid
       try { localStorage.setItem("lv_owner_uid", uid); } catch (e) {}
       document.cookie = "lv_owner_uid=" + uid + "; max-age=315360000; path=/; SameSite=Lax";
       try { window.name = "lv_" + uid; } catch (e) {}
@@ -221,7 +243,6 @@
       return false;
     }
 
-    // Layer 5: WebGL GPU + Shader Precision
     function getLock1_GPU() {
       try {
         const c = document.createElement('canvas');
@@ -236,7 +257,6 @@
       } catch (e) { return "glerr"; }
     }
 
-    // Layer 6: AudioContext Silicon DSP
     async function getLock2_Audio() {
       try {
         const AudioCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
@@ -262,7 +282,6 @@
       } catch (e) { return "auderr"; }
     }
 
-    // Layer 7: Canvas 2D + Font Metrics
     function getLock3_Canvas() {
       try {
         const c = document.createElement('canvas');
@@ -282,7 +301,6 @@
       } catch (e) { return "cnverr"; }
     }
 
-    // Layer 8: Screen + DPI + CPU + Touch + Timezone
     function getLock4_ScreenCPU() {
       const raw = [
         screen.width + "x" + screen.height,
@@ -297,6 +315,8 @@
     }
 
     async function verifyDevice() {
+      if (!captchaPassed) return;
+
       const params = new URLSearchParams(window.location.search);
       const uid = (params.get("uid") || "").trim();
       const statusEl = document.getElementById("status");
@@ -308,7 +328,7 @@
       }
 
       btn.disabled = true;
-      statusEl.innerHTML = "⏳ Running 8-layer security scan...";
+      statusEl.innerHTML = "⏳ Running 9-layer security scan...";
 
       const isStorageDup = await checkAndSetBrowserLock(uid);
       const l1 = getLock1_GPU();
@@ -322,7 +342,7 @@
       if (isStorageDup) {
         statusEl.innerHTML = "⚠️ <b>Duplicate Device Detected!</b><br>Returning to bot in 1 second...";
       } else {
-        statusEl.innerHTML = "✅ <b>8-Layer Scan Complete!</b><br>Returning to bot in 1 second...";
+        statusEl.innerHTML = "✅ <b>Verification Complete!</b><br>Returning to bot in 1 second...";
       }
 
       setTimeout(() => {
